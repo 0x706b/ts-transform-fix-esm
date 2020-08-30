@@ -161,16 +161,31 @@ export const createValidESMPath = (
    const specifierText = node.moduleSpecifier.text;
    if (packageJSON) {
       if (specifierText === packageJSON.name) {
-         return ts.createStringLiteral(
-            `${specifierText}/${
-               (packageJSON.main as string)?.replace("./", "") ||
-               (
-                  (packageJSON.exports?.["."] as string) ||
-                  (packageJSON.exports?.import?.["."] as string)
-               )?.replace("./", "") ||
-               "index"
-            }.${config.extension ?? "js"}`
-         );
+         if (packageJSON.main) {
+            return ts.createStringLiteral(
+               `${specifierText}/${(packageJSON.main as string).replace("./", "")}.${
+                  config.extension ?? "js"
+               }`
+            );
+         } else if (packageJSON.exports) {
+            if (packageJSON.exports.import?.["."]) {
+               return ts.createStringLiteral(
+                  `${specifierText}/${(packageJSON.exports.import["."] as string).replace(
+                     "./",
+                     ""
+                  )}.${config.extension ?? "js"}`
+               );
+            } else if (packageJSON.exports["."]?.import) {
+               return ts.createStringLiteral(
+                  `${specifierText}/${(packageJSON.exports["."].import as string).replace(
+                     "./",
+                     ""
+                  )}.${config.extension ?? "js"}`
+               );
+            }
+         } else {
+            return ts.createStringLiteral(`${specifierText}/index${config.extension ?? "js"}`);
+         }
       }
    }
    if (isSpecifierExtensionEmpty(node) || isSpecifierExtensionUnknown(node, config.ignore)) {
