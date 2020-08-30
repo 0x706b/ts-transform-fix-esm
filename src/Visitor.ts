@@ -49,7 +49,6 @@ export const importExportVisitor = (
 ): { info: VisitorInfo; visitedSourceFile: ts.SourceFile } => {
    /* eslint-disable-next-line */
    let visitorInfo = { ...VisitorInfoM.empty };
-   console.log(visitorInfo);
    const visitor = (info: VisitorInfo) => (node: ts.Node): ts.Node | undefined => {
       /* eslint-disable-next-line */
       let newInfo = { ...VisitorInfoM.empty };

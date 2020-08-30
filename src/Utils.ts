@@ -169,7 +169,6 @@ export const createValidESMPath = (
               "node_modules",
               node.moduleSpecifier.text
            );
-      console.log(isDirectory(absolutePath));
       return ts.createStringLiteral(
          isDirectory(absolutePath)
             ? `${specifierText}/index.${config.extension ?? "js"}`

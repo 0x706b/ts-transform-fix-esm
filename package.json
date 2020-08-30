@@ -1,12 +1,13 @@
 {
   "name": "@0x706b/ts-transform-fix-esm",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "private": false,
   "description": "",
   "keywords": [],
   "license": "MIT",
   "author": "Peter Krol <peter@peterkrol.com>",
   "main": "build/index.js",
+  "repository": "git://github.com/0x706b/ts-transform-fix-esm.git",
   "files": [
     "build/**/*"
   ],
