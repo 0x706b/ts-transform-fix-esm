@@ -95,7 +95,7 @@ export const importExportVisitor = (
                                    node.decorators,
                                    node.modifiers,
                                    node.importClause,
-                                   createValidESMPath(node, sourceFile, config)
+                                   createValidESMPath(node, sourceFile, config, packageJSON)
                                 )
                              ]
                           }
@@ -107,7 +107,7 @@ export const importExportVisitor = (
                                    node.decorators,
                                    node.modifiers,
                                    node.exportClause,
-                                   createValidESMPath(node, sourceFile, config)
+                                   createValidESMPath(node, sourceFile, config, packageJSON)
                                 )
                              ]
                           }
@@ -123,7 +123,7 @@ export const importExportVisitor = (
                               esmImports: [
                                  createDefaultImport(
                                     node,
-                                    createValidESMPath(node, sourceFile, config)
+                                    createValidESMPath(node, sourceFile, config, packageJSON)
                                  )
                               ]
                            };
@@ -141,7 +141,7 @@ export const importExportVisitor = (
                               esmImports: [
                                  createDefaultImportForNamespaceImport(
                                     node,
-                                    createValidESMPath(node, sourceFile, config)
+                                    createValidESMPath(node, sourceFile, config, packageJSON)
                                  )
                               ]
                            };
@@ -152,7 +152,7 @@ export const importExportVisitor = (
                               esmImports: [
                                  createDefaultImport(
                                     node,
-                                    createValidESMPath(node, sourceFile, config)
+                                    createValidESMPath(node, sourceFile, config, packageJSON)
                                  )
                               ]
                            };

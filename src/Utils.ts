@@ -155,9 +155,24 @@ export const isSpecifierExtensionUnknown = (
 export const createValidESMPath = (
    node: ImportOrExport,
    sourceFile: ts.SourceFile,
-   config: PluginConfig
+   config: PluginConfig,
+   packageJSON?: PackageJson
 ): ts.StringLiteral => {
    const specifierText = node.moduleSpecifier.text;
+   if (packageJSON) {
+      if (specifierText === packageJSON.name) {
+         return ts.createStringLiteral(
+            `${specifierText}/${
+               (packageJSON.main as string)?.replace("./", "") ||
+               (
+                  (packageJSON.exports?.["."] as string) ||
+                  (packageJSON.exports?.import?.["."] as string)
+               )?.replace("./", "") ||
+               "index"
+            }.${config.extension ?? "js"}`
+         );
+      }
+   }
    if (isSpecifierExtensionEmpty(node) || isSpecifierExtensionUnknown(node, config.ignore)) {
       const absolutePath = isSpecifierRelative(node)
          ? path.resolve(
