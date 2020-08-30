@@ -159,7 +159,7 @@ export const createValidESMPath = (
    packageJSON?: PackageJson
 ): ts.StringLiteral => {
    const specifierText = node.moduleSpecifier.text;
-   let mainPath;
+   let mainPath: string | undefined = undefined;
    if (packageJSON) {
       if (specifierText === packageJSON.name) {
          if (
@@ -171,12 +171,20 @@ export const createValidESMPath = (
       }
       if (specifierText.includes(packageJSON.name)) {
          if (packageJSON.main) {
-            mainPath = packageJSON.main;
+            mainPath = packageJSON.main.replace("./", "").split("/").slice(0, -1).join("/");
          } else if (packageJSON.exports) {
             if (packageJSON.exports.import?.["./"]) {
-               mainPath = packageJSON.exports.import["./"];
+               mainPath = packageJSON.exports.import["./"]
+                  .replace("./", "")
+                  .split("/")
+                  .slice(0, -1)
+                  .join("/");
             } else if (packageJSON.exports["./"]?.import) {
-               mainPath = packageJSON.exports["./"].import;
+               mainPath = packageJSON.exports["./"].import
+                  .replace("./", "")
+                  .split("/")
+                  .slice(0, -1)
+                  .join("/");
             }
          }
       }
@@ -190,16 +198,17 @@ export const createValidESMPath = (
          : path.resolve(
               config.relativeProjectRoot ?? process.cwd(),
               "node_modules",
-              mainPath
-                 ? `${packageJSON?.name}/${(mainPath as string)
-                      .split("/")
-                      .slice(0, -1)
-                      .join("/")}/${
+              ...(mainPath
+                 ? [
+                      packageJSON?.name,
+                      mainPath,
                       specifierText
                          .split(packageJSON?.name)
-                         .filter((v) => v !== packageJSON?.name)[0]
-                   }`
-                 : specifierText
+                         .filter((v) => v !== packageJSON?.name)
+                         .map((v) => v.replace(`/${mainPath}/`, ""))
+                         .join("")
+                   ]
+                 : [specifierText])
            );
       return ts.createStringLiteral(
          isDirectory(absolutePath)
