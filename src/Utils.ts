@@ -191,7 +191,10 @@ export const createValidESMPath = (
               config.relativeProjectRoot ?? process.cwd(),
               "node_modules",
               mainPath
-                 ? `${packageJSON?.name}/${mainPath}/${specifierText
+                 ? `${packageJSON?.name}/${(mainPath as string)
+                      .split("/")
+                      .slice(0, -1)
+                      .join("/")}/${specifierText
                       .split("/")
                       .filter((v) => v !== packageJSON?.name)
                       .join("/")}`
