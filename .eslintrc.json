@@ -1,0 +1,92 @@
+{
+   "env": {
+      "es6": true,
+      "node": true
+   },
+   "extends": [
+      "eslint:recommended",
+      "plugin:@typescript-eslint/eslint-recommended",
+      "plugin:@typescript-eslint/recommended",
+      "prettier/@typescript-eslint"
+   ],
+   "ignorePatterns": [
+      "build/"
+   ],
+   "parser": "@typescript-eslint/parser",
+   "parserOptions": {
+      "ecmaVersion": 2019,
+      "sourceType": "module",
+      "project": "./tsconfig.json"
+   },
+   "plugins": [
+      "import",
+      "simple-import-sort",
+      "sort-keys-fix",
+      "typescript-sort-keys",
+      "eslint-plugin-prettier",
+      "@typescript-eslint"
+   ],
+   "rules": {
+      "@typescript-eslint/ban-ts-comment": "off",
+      "@typescript-eslint/ban-ts-ignore": "off",
+      "@typescript-eslint/ban-types": "off",
+      "@typescript-eslint/explicit-function-return-type": "off",
+      "@typescript-eslint/explicit-module-boundary-types": "off",
+      "@typescript-eslint/member-delimiter-style": [
+         "warn",
+         {
+           "multiline": {
+               "delimiter": "semi"
+            },
+            "singleline": {
+               "delimiter": "semi"
+            }
+         }
+      ],
+      "@typescript-eslint/no-empty-interface": "off",
+      "@typescript-eslint/no-explicit-any": "off",
+      "@typescript-eslint/no-unused-vars": [
+         "warn",
+         {
+            "argsIgnorePattern": "^_",
+            "varsIgnorePattern": "^ignored?$"
+         }
+      ],
+      "@typescript-eslint/no-use-before-define": "error",
+      "import/first": "error",
+      "import/newline-after-import": "error",
+      "import/no-duplicates": "error",
+      "import/no-unresolved": "error",
+      "import/order": "off",
+      "no-param-reassign": [
+         "error"
+      ],
+      "prettier/prettier": [
+         "warn",
+         {},
+         {
+            "usePrettierrc": true
+         }
+      ],
+      "simple-import-sort/sort": "error",
+      "sort-keys-fix/sort-keys-fix": [
+         "warn",
+         "asc"
+      ],
+      "typescript-sort-keys/interface": "warn",
+      "typescript-sort-keys/string-enum": "warn"
+   },
+   "settings": {
+      "import/parsers": {
+         "@typescript-eslint/parser": [
+            ".ts",
+            ".tsx"
+         ]
+      },
+      "import/resolver": {
+         "typescript": {
+            "alwaysTryTypes": true
+         }
+      }
+   }
+}

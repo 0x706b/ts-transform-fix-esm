@@ -1,0 +1,44 @@
+{
+  "name": "@0x706b/ts-transform-fix-esm",
+  "version": "0.0.1",
+  "private": false,
+  "description": "",
+  "keywords": [],
+  "license": "MIT",
+  "author": "Peter Krol <peter@peterkrol.com>",
+  "main": "build/index.js",
+  "files": [
+    "build/**/*"
+  ],
+  "scripts": {
+    "build": "ttsc",
+    "clean": "rimraf build",
+    "prepublish": "yarn clean && yarn build"
+  },
+  "dependencies": {
+    "fp-ts": "^2.8.2"
+  },
+  "devDependencies": {
+    "@types/node": "^14.6.0",
+    "@typescript-eslint/eslint-plugin": "^3.10.0",
+    "@typescript-eslint/parser": "^3.10.0",
+    "eslint": "^7.7.0",
+    "eslint-config-prettier": "^6.11.0",
+    "eslint-import-resolver-typescript": "^2.2.1",
+    "eslint-plugin-import": "^2.22.0",
+    "eslint-plugin-prettier": "^3.1.4",
+    "eslint-plugin-simple-import-sort": "^5.0.3",
+    "eslint-plugin-sort-keys-fix": "^1.1.1",
+    "eslint-plugin-typescript-sort-keys": "^1.3.0",
+    "fp-ts": "^2.8.2",
+    "prettier": "^2.1.0",
+    "rimraf": "^3.0.2",
+    "sort-package-json": "^1.44.0",
+    "ts-node": "^9.0.0",
+    "ttypescript": "^1.5.10",
+    "typescript": "^4.1.0-dev.20200823"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
