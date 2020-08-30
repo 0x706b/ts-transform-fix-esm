@@ -194,10 +194,11 @@ export const createValidESMPath = (
                  ? `${packageJSON?.name}/${(mainPath as string)
                       .split("/")
                       .slice(0, -1)
-                      .join("/")}/${specifierText
-                      .split("/")
-                      .filter((v) => v !== packageJSON?.name)
-                      .join("/")}`
+                      .join("/")}/${
+                      specifierText
+                         .split(packageJSON?.name)
+                         .filter((v) => v !== packageJSON?.name)[0]
+                   }`
                  : specifierText
            );
       return ts.createStringLiteral(
