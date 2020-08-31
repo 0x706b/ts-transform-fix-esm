@@ -1,0 +1,14 @@
+{
+   "compilerOptions": {
+      "module": "ESNext",
+      "outDir": "build",
+      "moduleResolution": "node",
+      "allowSyntheticDefaultImports": true,
+      "plugins": [
+         {
+            "transform": "../build/index.js",
+            "after": true
+         }
+      ]
+   }
+}

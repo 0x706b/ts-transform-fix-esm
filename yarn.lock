@@ -1514,15 +1514,15 @@ type-fest@^0.8.1:
   resolved "https://registry.yarnpkg.com/type-fest/-/type-fest-0.8.1.tgz#09e249ebde851d3b1e48d27c105444667f17b83d"
   integrity sha512-4dbzIzqvjtgiM5rw1k5rEHtBANKmdudhGyBEajN01fEyhaAIhsoKNy6y7+IN93IfpFtwY9iqi7kD+xwKhQsNJA==
 
-typescript@^4.1.0-dev.20200823:
-  version "4.1.0-dev.20200829"
-  resolved "https://registry.yarnpkg.com/typescript/-/typescript-4.1.0-dev.20200829.tgz#c07a8104d1a56be301465aed209a1347955a87f6"
-  integrity sha512-39o0+KRZAMolJCkkctXsVBTvOwRblffX/4Bm4i9bT354ubuAufVdEkfeAtUWNLoEcPnN40DSvnmYg/PbwefuoA==
+typescript@next:
+  version "4.1.0-dev.20200830"
+  resolved "https://registry.yarnpkg.com/typescript/-/typescript-4.1.0-dev.20200830.tgz#92fd4f5b2020ee8769c5298573b1871815ece93b"
+  integrity sha512-dzFKSm+0YUdwJJcR71QSGecQUQIjWuZmLqdjHO5qRsdhByJIPaKeiDl77jaeBx5tfZbD1JxynEqYSz8AqPfr7g==
 
 uri-js@^4.2.2:
-  version "4.3.0"
-  resolved "https://registry.yarnpkg.com/uri-js/-/uri-js-4.3.0.tgz#e16cb9ef7b4036d74be59dc7342258e6f1aca20e"
-  integrity sha512-Q9Q9RlMM08eWfdPPmDDrXd8Ny3R1sY/DaRDR2zTPPneJ6GYiLx3++fPiZobv49ovkYAnHl/P72Ie3HWXIRVVYA==
+  version "4.4.0"
+  resolved "https://registry.yarnpkg.com/uri-js/-/uri-js-4.4.0.tgz#aa714261de793e8a82347a7bcc9ce74e86f28602"
+  integrity sha512-B0yRTzYdUCCn9n+F4+Gh4yIDtMQcaJsmYBDsTSG8g/OejKBodLQ2IHfN3bM7jUsRXndopT7OIXWdYqc1fjmV6g==
   dependencies:
     punycode "^2.1.0"
 

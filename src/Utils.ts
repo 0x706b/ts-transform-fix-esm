@@ -1,5 +1,6 @@
 import * as E from "fp-ts/lib/Either";
 import * as F from "fp-ts/lib/function";
+import * as O from "fp-ts/lib/Option";
 import * as A from "fp-ts/lib/ReadonlyNonEmptyArray";
 import * as R from "fp-ts/lib/ReadonlyRecord";
 import fs from "fs";
@@ -152,70 +153,89 @@ export const isSpecifierExtensionUnknown = (
    return true;
 };
 
+export const foldNullable = <A, B>(onNone: () => B, onSome: (a: A) => B) => (v?: A) =>
+   F.pipe(O.fromNullable(v), O.fold(onNone, onSome));
+
+export const getAbsolutePathForSpecifier = (
+   node: ImportOrExport,
+   sourceFile: ts.SourceFile,
+   config: PluginConfig,
+   packageJSON?: PackageJson
+) =>
+   F.pipe(
+      node,
+      O.fromPredicate(F.not(isSpecifierRelative)),
+      O.chain((n) =>
+         F.pipe(
+            O.some({}),
+            O.bind("specifierText", () => O.some(n.moduleSpecifier.text)),
+            O.bind("pkg", () => O.fromNullable(packageJSON)),
+            O.bind("absolutePath", ({ pkg, specifierText }) =>
+               F.pipe(
+                  pkg,
+                  O.fromPredicate((p) => !!p.name),
+                  O.chain(O.fromPredicate((p) => specifierText.includes(p.name))),
+                  O.chain(
+                     (p): O.Option<string> =>
+                        p.main
+                           ? O.some(p.main)
+                           : p.exports
+                           ? p.exports.import?.["./"]
+                              ? O.some(p.exports.import["./"])
+                              : p.exports["./"]?.import
+                              ? O.some(p.exports["./"].import)
+                              : O.none
+                           : O.none
+                  ),
+                  O.map((s) => s.replace("./", "").split("/").slice(0, -1).join("/")),
+                  O.map((mainPath): string[] => [
+                     pkg.name,
+                     mainPath,
+                     ...specifierText.replace(pkg.name, "").replace(`/${mainPath}/`, "").split("/")
+                  ]),
+                  O.fold(() => [specifierText], F.identity),
+                  (parts) =>
+                     O.some(
+                        path.resolve(
+                           config?.relativeProjectRoot ?? process.cwd(),
+                           "node_modules",
+                           ...parts
+                        )
+                     )
+               )
+            )
+         )
+      ),
+      O.fold(
+         () =>
+            path.resolve(
+               path.parse(sourceFile.fileName).dir,
+               node.moduleSpecifier.text === ".." ? "../" : node.moduleSpecifier.text
+            ),
+         ({ absolutePath }) => absolutePath
+      )
+   );
+
 export const createValidESMPath = (
    node: ImportOrExport,
    sourceFile: ts.SourceFile,
    config: PluginConfig,
    packageJSON?: PackageJson
 ): ts.StringLiteral => {
-   const specifierText = node.moduleSpecifier.text;
-   let mainPath: string | undefined = undefined;
-   if (packageJSON) {
-      if (specifierText === packageJSON.name) {
-         if (
-            packageJSON.main ||
-            (packageJSON.exports && deepHasProperty(packageJSON.exports, "."))
-         ) {
-            return ts.createStringLiteral(specifierText);
-         }
-      }
-      if (specifierText.includes(packageJSON.name)) {
-         if (packageJSON.main) {
-            mainPath = packageJSON.main.replace("./", "").split("/").slice(0, -1).join("/");
-         } else if (packageJSON.exports) {
-            if (packageJSON.exports.import?.["./"]) {
-               mainPath = packageJSON.exports.import["./"]
-                  .replace("./", "")
-                  .split("/")
-                  .slice(0, -1)
-                  .join("/");
-            } else if (packageJSON.exports["./"]?.import) {
-               mainPath = packageJSON.exports["./"].import
-                  .replace("./", "")
-                  .split("/")
-                  .slice(0, -1)
-                  .join("/");
-            }
-         }
-      }
-   }
-   if (isSpecifierExtensionEmpty(node) || isSpecifierExtensionUnknown(node, config.ignore)) {
-      const absolutePath = isSpecifierRelative(node)
-         ? path.resolve(
-              path.parse(sourceFile.fileName).dir,
-              specifierText === ".." ? "../" : specifierText
-           )
-         : path.resolve(
-              config.relativeProjectRoot ?? process.cwd(),
-              "node_modules",
-              ...(mainPath
-                 ? [
-                      packageJSON?.name,
-                      mainPath,
-                      specifierText
-                         .split(packageJSON?.name)
-                         .filter((v) => v !== packageJSON?.name)
-                         .map((v) => v.replace(`/${mainPath}/`, ""))
-                         .join("")
-                   ]
-                 : [specifierText])
-           );
-      return ts.createStringLiteral(
-         isDirectory(absolutePath)
-            ? `${specifierText}/index.${config.extension ?? "js"}`
-            : `${specifierText}.${config.extension ?? "js"}`
-      );
-   } else {
+   if (
+      packageJSON &&
+      node.moduleSpecifier.text === packageJSON.name &&
+      (packageJSON.main || (packageJSON.exports && deepHasProperty(packageJSON.exports, ".")))
+   ) {
       return node.moduleSpecifier;
    }
+   if (isSpecifierExtensionEmpty(node) || isSpecifierExtensionUnknown(node, config.ignore)) {
+      const absolutePath = getAbsolutePathForSpecifier(node, sourceFile, config, packageJSON);
+      return ts.createStringLiteral(
+         isDirectory(absolutePath)
+            ? `${node.moduleSpecifier.text}/index.${config.extension ?? "js"}`
+            : `${node.moduleSpecifier.text}.${config.extension ?? "js"}`
+      );
+   }
+   return node.moduleSpecifier;
 };
