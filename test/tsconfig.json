@@ -7,6 +7,7 @@
       "plugins": [
          {
             "transform": "../build/index.js",
+            "createRequire": true,
             "after": true
          }
       ]

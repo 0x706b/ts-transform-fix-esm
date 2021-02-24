@@ -1,6 +1,4 @@
 import * as A from "fp-ts/lib/Array";
-import * as E from "fp-ts/lib/Either";
-import * as F from "fp-ts/lib/function";
 import * as M from "fp-ts/lib/Monoid";
 import module from "module";
 import * as ts from "typescript";
@@ -42,15 +40,108 @@ const VisitorInfoM = M.getStructMonoid<VisitorInfo>({
    shouldCreateRequire: M.monoidAny
 });
 
-export const importExportVisitor = (
+export const importExportVisitorSpecifierOnly = (
    ctx: ts.TransformationContext,
    sourceFile: ts.SourceFile,
    config: PluginConfig
 ): { info: VisitorInfo; visitedSourceFile: ts.SourceFile } => {
-   /* eslint-disable-next-line */
-   let visitorInfo = { ...VisitorInfoM.empty };
+   const visitorInfo = { ...VisitorInfoM.empty };
    const visitor = (info: VisitorInfo) => (node: ts.Node): ts.Node | undefined => {
-      /* eslint-disable-next-line */
+      let newInfo = { ...VisitorInfoM.empty };
+      if (isImportOrExport(node)) {
+         const specifierText = node.moduleSpecifier.text;
+         if (isSpecifierRelative(node)) {
+            if (isImport(node)) {
+               newInfo = {
+                  ...VisitorInfoM.empty,
+                  esmImports: [
+                     ts.createImportDeclaration(
+                        node.decorators,
+                        node.modifiers,
+                        node.importClause,
+                        createValidESMPath(node, sourceFile, config)
+                     )
+                  ]
+               };
+            } else if (isExport(node)) {
+               newInfo = {
+                  ...VisitorInfoM.empty,
+                  esmExports: [
+                     ts.createExportDeclaration(
+                        node.decorators,
+                        node.modifiers,
+                        node.exportClause,
+                        createValidESMPath(node, sourceFile, config)
+                     )
+                  ]
+               };
+            }
+         } else {
+            const packageJSON = getPackageJSON(node, config.relativeProjectRoot);
+            if (packageJSON) {
+               if (module.builtinModules.includes(specifierText)) {
+                  if (isImport(node)) {
+                     newInfo = {
+                        ...VisitorInfoM.empty,
+                        esmImports: [node]
+                     };
+                  } else if (isExport(node)) {
+                     newInfo = {
+                        ...VisitorInfoM.empty,
+                        esmExports: [node]
+                     };
+                  }
+               } else {
+                  if (isImport(node)) {
+                     newInfo = {
+                        ...VisitorInfoM.empty,
+                        esmImports: [
+                           ts.createImportDeclaration(
+                              node.decorators,
+                              node.modifiers,
+                              node.importClause,
+                              createValidESMPath(node, sourceFile, config, packageJSON)
+                           )
+                        ]
+                     };
+                  } else if (isExport(node)) {
+                     newInfo = {
+                        ...VisitorInfoM.empty,
+                        esmExports: [
+                           ts.createExportDeclaration(
+                              node.decorators,
+                              node.modifiers,
+                              node.exportClause,
+                              createValidESMPath(node, sourceFile, config, packageJSON)
+                           )
+                        ]
+                     };
+                  }
+               }
+            }
+         }
+
+         info.esmExports = info.esmExports.concat(...newInfo.esmExports);
+         info.esmImports = info.esmImports.concat(...newInfo.esmImports);
+         return undefined;
+      } else {
+         return ts.visitEachChild(node, visitor(info), ctx);
+      }
+   };
+   const visitedSourceFile = ts.visitEachChild(sourceFile, visitor(visitorInfo), ctx);
+   return {
+      info: visitorInfo,
+      visitedSourceFile
+   };
+};
+
+export const importExportVisitorFull = (
+   ctx: ts.TransformationContext,
+   sourceFile: ts.SourceFile,
+   config: PluginConfig
+): { info: VisitorInfo; visitedSourceFile: ts.SourceFile } => {
+   const visitorInfo = { ...VisitorInfoM.empty };
+   const visitor = (info: VisitorInfo) => (node: ts.Node): ts.Node | undefined => {
       let newInfo = { ...VisitorInfoM.empty };
       if (isImportOrExport(node)) {
          const specifierText = node.moduleSpecifier.text;
@@ -82,148 +173,255 @@ export const importExportVisitor = (
                  }
                : VisitorInfoM.empty;
          } else {
-            newInfo = F.pipe(
-               getPackageJSON(node, config.relativeProjectRoot),
-               E.map((packageJSON) => {
-                  if (isESModule(packageJSON) || isConditionalModule(packageJSON)) {
-                     // Imported or exported path is in an ESM package, so only create a valid ESM specifier
-                     return isImport(node)
-                        ? {
-                             ...VisitorInfoM.empty,
-                             esmImports: [
-                                ts.createImportDeclaration(
-                                   node.decorators,
-                                   node.modifiers,
-                                   node.importClause,
-                                   createValidESMPath(node, sourceFile, config, packageJSON)
-                                )
-                             ]
-                          }
-                        : isExport(node)
-                        ? {
-                             ...VisitorInfoM.empty,
-                             esmExports: [
-                                ts.createExportDeclaration(
-                                   node.decorators,
-                                   node.modifiers,
-                                   node.exportClause,
-                                   createValidESMPath(node, sourceFile, config, packageJSON)
-                                )
-                             ]
-                          }
-                        : VisitorInfoM.empty;
-                  } else {
-                     // commonjs, builtin, or no package: here we have some fun
-                     if (isImport(node)) {
-                        if (isNamedImport(node) && isDefaultImport(node)) {
-                           // import A, { a, b } from "..."
-                           return {
-                              ...VisitorInfoM.empty,
-                              destructureRequires: [createDestructureStatementForImport(node)],
-                              esmImports: [
-                                 createDefaultImport(
-                                    node,
-                                    createValidESMPath(node, sourceFile, config, packageJSON)
-                                 )
-                              ]
-                           };
-                        } else if (isNamedImport(node)) {
-                           // import { A } from "..."
-                           return {
-                              ...VisitorInfoM.empty,
-                              requires: [createRequireStatementForImport(node, config.prefix)],
-                              shouldCreateRequire: true
-                           };
-                        } else if (isNamespaceImport(node)) {
-                           // import * as A from "..."
-                           return {
-                              ...VisitorInfoM.empty,
-                              esmImports: [
-                                 createDefaultImportForNamespaceImport(
-                                    node,
-                                    createValidESMPath(node, sourceFile, config, packageJSON)
-                                 )
-                              ]
-                           };
-                        } else if (isDefaultImport(node)) {
-                           // import A from "..."
-                           return {
-                              ...VisitorInfoM.empty,
-                              esmImports: [
-                                 createDefaultImport(
-                                    node,
-                                    createValidESMPath(node, sourceFile, config, packageJSON)
-                                 )
-                              ]
-                           };
-                        }
-                     } else if (isExport(node)) {
-                        if (isNamedExport(node)) {
-                           // export { a, b } from "..."
-                           return {
-                              ...VisitorInfoM.empty,
-                              esmExports: [
-                                 createExportDeclarationForNamedRequires(node, config.prefix)
-                              ],
-                              requires: [createRequireStatementForExport(node, config.prefix)],
-                              shouldCreateRequire: true
-                           };
-                        } else if (isNamespaceExport(node)) {
-                           // export * as A from "..."
-                           return {
-                              ...VisitorInfoM.empty,
-                              esmExports: [createNamedExportsForDefaultImport(node, config.prefix)],
-                              esmImports: [
-                                 createDefaultImportForNamespaceExport(
-                                    node,
-                                    createValidESMPath(node, sourceFile, config),
-                                    config.prefix
-                                 )
-                              ]
-                           };
-                        } else {
-                           // export * from "..."
-                           throw new Error(
-                              `Cannot currently export * from 'cjs-module' @ ${
-                                 sourceFile.fileName
-                              } : ${node.getText()}`
-                           );
-                           /*
-                            * const { identifier, declaration } = createDefaultImportForDefaultExport(
-                            *    createValidESMPath(node, sourceFile, config),
-                            *    config.prefix
-                            * );
-                            * return {
-                            *    ...VisitorInfoM.empty,
-                            *    cjsExportStarIdentifiers: [identifier],
-                            *    esmImports: []
-                            * };
-                            */
-                        }
-                     }
-                     return VisitorInfoM.empty;
-                  }
-               }),
-               E.mapLeft(() => {
+            const packageJSON = getPackageJSON(node, config.relativeProjectRoot);
+            if (packageJSON) {
+               if (isESModule(packageJSON) || isConditionalModule(packageJSON)) {
+                  // Imported or exported path is in an ESM package, so only create a valid ESM specifier
+                  newInfo = isImport(node)
+                     ? {
+                          ...VisitorInfoM.empty,
+                          esmImports: [
+                             ts.createImportDeclaration(
+                                node.decorators,
+                                node.modifiers,
+                                node.importClause,
+                                createValidESMPath(node, sourceFile, config, packageJSON)
+                             )
+                          ]
+                       }
+                     : isExport(node)
+                     ? {
+                          ...VisitorInfoM.empty,
+                          esmExports: [
+                             ts.createExportDeclaration(
+                                node.decorators,
+                                node.modifiers,
+                                node.exportClause,
+                                createValidESMPath(node, sourceFile, config, packageJSON)
+                             )
+                          ]
+                       }
+                     : VisitorInfoM.empty;
+               } else {
+                  // commonjs, builtin, or no package
                   if (isImport(node)) {
-                     if (module.builtinModules.includes(specifierText)) {
-                        return {
+                     if (isNamedImport(node) && isDefaultImport(node)) {
+                        // import A, { a, b } from "..."
+                        newInfo = {
                            ...VisitorInfoM.empty,
-                           esmImports: [node]
+                           destructureRequires: [createDestructureStatementForImport(node)],
+                           esmImports: [
+                              createDefaultImport(
+                                 node,
+                                 createValidESMPath(node, sourceFile, config, packageJSON)
+                              )
+                           ]
+                        };
+                     } else if (isNamedImport(node)) {
+                        // import { A } from "..."
+                        newInfo = {
+                           ...VisitorInfoM.empty,
+                           requires: [createRequireStatementForImport(node, config.prefix)],
+                           shouldCreateRequire: true
+                        };
+                     } else if (isNamespaceImport(node)) {
+                        // import * as A from "..."
+                        newInfo = {
+                           ...VisitorInfoM.empty,
+                           esmImports: [
+                              createDefaultImportForNamespaceImport(
+                                 node,
+                                 createValidESMPath(node, sourceFile, config, packageJSON)
+                              )
+                           ]
+                        };
+                     } else if (isDefaultImport(node)) {
+                        // import A from "..."
+                        newInfo = {
+                           ...VisitorInfoM.empty,
+                           esmImports: [
+                              createDefaultImport(
+                                 node,
+                                 createValidESMPath(node, sourceFile, config, packageJSON)
+                              )
+                           ]
                         };
                      }
                   } else if (isExport(node)) {
-                     if (module.builtinModules.includes(specifierText)) {
-                        return {
+                     if (isNamedExport(node)) {
+                        // export { a, b } from "..."
+                        newInfo = {
                            ...VisitorInfoM.empty,
-                           esmExports: [node]
+                           esmExports: [
+                              createExportDeclarationForNamedRequires(node, config.prefix)
+                           ],
+                           requires: [createRequireStatementForExport(node, config.prefix)],
+                           shouldCreateRequire: true
                         };
+                     } else if (isNamespaceExport(node)) {
+                        // export * as A from "..."
+                        newInfo = {
+                           ...VisitorInfoM.empty,
+                           esmExports: [createNamedExportsForDefaultImport(node, config.prefix)],
+                           esmImports: [
+                              createDefaultImportForNamespaceExport(
+                                 node,
+                                 createValidESMPath(node, sourceFile, config),
+                                 config.prefix
+                              )
+                           ]
+                        };
+                     } else {
+                        // export * from "..."
+                        throw new Error(
+                           `Cannot currently export * from 'cjs-module' @ ${
+                              sourceFile.fileName
+                           } : ${node.getText()}`
+                        );
+                     }
+                  } else {
+                     if (isImport(node)) {
+                        if (module.builtinModules.includes(specifierText)) {
+                           newInfo = {
+                              ...VisitorInfoM.empty,
+                              esmImports: [node]
+                           };
+                        }
+                     } else if (isExport(node)) {
+                        if (module.builtinModules.includes(specifierText)) {
+                           newInfo = {
+                              ...VisitorInfoM.empty,
+                              esmExports: [node]
+                           };
+                        }
                      }
                   }
-                  return VisitorInfoM.empty;
-               }),
-               E.fold(F.identity, F.identity)
-            );
+               }
+            }
+            /*
+             * newInfo = F.pipe(
+             *    getPackageJSON(node, config.relativeProjectRoot),
+             *    E.map((packageJSON) => {
+             *       if (isESModule(packageJSON) || isConditionalModule(packageJSON)) {
+             *          return isImport(node)
+             *             ? {
+             *                  ...VisitorInfoM.empty,
+             *                  esmImports: [
+             *                     ts.createImportDeclaration(
+             *                        node.decorators,
+             *                        node.modifiers,
+             *                        node.importClause,
+             *                        createValidESMPath(node, sourceFile, config, packageJSON)
+             *                     )
+             *                  ]
+             *               }
+             *             : isExport(node)
+             *             ? {
+             *                  ...VisitorInfoM.empty,
+             *                  esmExports: [
+             *                     ts.createExportDeclaration(
+             *                        node.decorators,
+             *                        node.modifiers,
+             *                        node.exportClause,
+             *                        createValidESMPath(node, sourceFile, config, packageJSON)
+             *                     )
+             *                  ]
+             *               }
+             *             : VisitorInfoM.empty;
+             *       } else {
+             *          if (isImport(node)) {
+             *             if (isNamedImport(node) && isDefaultImport(node)) {
+             *                return {
+             *                   ...VisitorInfoM.empty,
+             *                   destructureRequires: [createDestructureStatementForImport(node)],
+             *                   esmImports: [
+             *                      createDefaultImport(
+             *                         node,
+             *                         createValidESMPath(node, sourceFile, config, packageJSON)
+             *                      )
+             *                   ]
+             *                };
+             *             } else if (isNamedImport(node)) {
+             *                return {
+             *                   ...VisitorInfoM.empty,
+             *                   requires: [createRequireStatementForImport(node, config.prefix)],
+             *                   shouldCreateRequire: true
+             *                };
+             *             } else if (isNamespaceImport(node)) {
+             *                return {
+             *                   ...VisitorInfoM.empty,
+             *                   esmImports: [
+             *                      createDefaultImportForNamespaceImport(
+             *                         node,
+             *                         createValidESMPath(node, sourceFile, config, packageJSON)
+             *                      )
+             *                   ]
+             *                };
+             *             } else if (isDefaultImport(node)) {
+             *                return {
+             *                   ...VisitorInfoM.empty,
+             *                   esmImports: [
+             *                      createDefaultImport(
+             *                         node,
+             *                         createValidESMPath(node, sourceFile, config, packageJSON)
+             *                      )
+             *                   ]
+             *                };
+             *             }
+             *          } else if (isExport(node)) {
+             *             if (isNamedExport(node)) {
+             *                return {
+             *                   ...VisitorInfoM.empty,
+             *                   esmExports: [
+             *                      createExportDeclarationForNamedRequires(node, config.prefix)
+             *                   ],
+             *                   requires: [createRequireStatementForExport(node, config.prefix)],
+             *                   shouldCreateRequire: true
+             *                };
+             *             } else if (isNamespaceExport(node)) {
+             *                return {
+             *                   ...VisitorInfoM.empty,
+             *                   esmExports: [createNamedExportsForDefaultImport(node, config.prefix)],
+             *                   esmImports: [
+             *                      createDefaultImportForNamespaceExport(
+             *                         node,
+             *                         createValidESMPath(node, sourceFile, config),
+             *                         config.prefix
+             *                      )
+             *                   ]
+             *                };
+             *             } else {
+             *                throw new Error(
+             *                   `Cannot currently export * from 'cjs-module' @ ${
+             *                      sourceFile.fileName
+             *                   } : ${node.getText()}`
+             *                );
+             *             }
+             *          }
+             *          return VisitorInfoM.empty;
+             *       }
+             *    }),
+             *    E.mapLeft(() => {
+             *       if (isImport(node)) {
+             *          if (module.builtinModules.includes(specifierText)) {
+             *             return {
+             *                ...VisitorInfoM.empty,
+             *                esmImports: [node]
+             *             };
+             *          }
+             *       } else if (isExport(node)) {
+             *          if (module.builtinModules.includes(specifierText)) {
+             *             return {
+             *                ...VisitorInfoM.empty,
+             *                esmExports: [node]
+             *             };
+             *          }
+             *       }
+             *       return VisitorInfoM.empty;
+             *    }),
+             *    E.fold(F.identity, F.identity)
+             * );
+             */
          }
          info.shouldCreateRequire = info.shouldCreateRequire || newInfo.shouldCreateRequire;
          info.esmExports = info.esmExports.concat(...newInfo.esmExports);

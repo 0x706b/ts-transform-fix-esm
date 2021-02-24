@@ -103,16 +103,17 @@ export const isConditionalModule = (packageJSON: PackageJson) =>
 
 export const isOldESModule = (packageJSON: PackageJson) => packageJSON.module;
 
-export const findPackageJSON = (prospectivePath: string): E.Either<null, Buffer> => {
+export const findPackageJSON = (prospectivePath: string): Buffer | null => {
    const folderPath = (prospectivePath.split("/") as unknown) as A.ReadonlyNonEmptyArray<string>;
    if (A.last(folderPath) === "node_modules") {
-      return E.left(null);
+      return null;
    } else {
-      return F.pipe(
-         A.snoc(folderPath, "package.json"),
-         (p) => readFile(p.join("/")),
-         recover(() => F.pipe(folderPath, A.init, (p) => findPackageJSON(p.join("/"))))
-      );
+      const newPath = [...folderPath, "package.json"].join("/");
+      try {
+         return fs.readFileSync(newPath);
+      } catch {
+         return findPackageJSON(A.init(folderPath).join("/"));
+      }
    }
 };
 
@@ -122,15 +123,27 @@ export const getPackageJSON = (node: ImportOrExport, relativeProjectRoot?: strin
       "node_modules",
       node.moduleSpecifier.text
    );
-   return F.pipe(
-      findPackageJSON(prospectivePath),
-      E.chain((buf) =>
-         F.pipe(
-            E.parseJSON(buf.toString(), () => null),
-            E.map((json) => json as PackageJson)
-         )
-      )
-   );
+   const maybeBuffer = findPackageJSON(prospectivePath);
+   if (maybeBuffer) {
+      try {
+         return JSON.parse(maybeBuffer.toString()) as PackageJson;
+      } catch {
+         return null;
+      }
+   } else {
+      return null;
+   }
+   /*
+    * return F.pipe(
+    *    findPackageJSON(prospectivePath),
+    *    E.chain((buf) =>
+    *       F.pipe(
+    *          E.parseJSON(buf.toString(), () => null),
+    *          E.map((json) => json as PackageJson)
+    *       )
+    *    )
+    * );
+    */
 };
 
 export const isSpecifierExtensionEmpty = (node: ImportOrExport) =>
@@ -161,60 +174,97 @@ export const getAbsolutePathForSpecifier = (
    sourceFile: ts.SourceFile,
    config: PluginConfig,
    packageJSON?: PackageJson
-) =>
-   F.pipe(
-      node,
-      O.fromPredicate(F.not(isSpecifierRelative)),
-      O.chain((n) =>
-         F.pipe(
-            O.some({}),
-            O.bind("specifierText", () => O.some(n.moduleSpecifier.text)),
-            O.bind("pkg", () => O.fromNullable(packageJSON)),
-            O.bind("absolutePath", ({ pkg, specifierText }) =>
-               F.pipe(
-                  pkg,
-                  O.fromPredicate((p) => !!p.name),
-                  O.chain(O.fromPredicate((p) => specifierText.includes(p.name))),
-                  O.chain(
-                     (p): O.Option<string> =>
-                        p.main
-                           ? O.some(p.main)
-                           : p.exports
-                           ? p.exports.import?.["./"]
-                              ? O.some(p.exports.import["./"])
-                              : p.exports["./"]?.import
-                              ? O.some(p.exports["./"].import)
-                              : O.none
-                           : O.none
-                  ),
-                  O.map((s) => s.replace("./", "").split("/").slice(0, -1).join("/")),
-                  O.map((mainPath): string[] => [
-                     pkg.name,
-                     mainPath,
-                     ...specifierText.replace(pkg.name, "").replace(`/${mainPath}/`, "").split("/")
-                  ]),
-                  O.fold(() => [specifierText], F.identity),
-                  (parts) =>
-                     O.some(
-                        path.resolve(
-                           config?.relativeProjectRoot ?? process.cwd(),
-                           "node_modules",
-                           ...parts
-                        )
-                     )
-               )
-            )
-         )
-      ),
-      O.fold(
-         () =>
-            path.resolve(
-               path.parse(sourceFile.fileName).dir,
-               node.moduleSpecifier.text === ".." ? "../" : node.moduleSpecifier.text
+) => {
+   const specifierText = node.moduleSpecifier.text;
+   if (isSpecifierRelative(node)) {
+      return path.resolve(
+         path.parse(sourceFile.fileName).dir,
+         specifierText === ".." ? "../" : specifierText
+      );
+   } else {
+      if (packageJSON && packageJSON.name && specifierText.includes(packageJSON.name)) {
+         const p = packageJSON;
+         const parts = F.pipe(
+            O.fromNullable<string>(
+               p.exports?.import?.["./*"] ?? p.exports?.["./*"]?.import ?? p.main ?? null
             ),
-         ({ absolutePath }) => absolutePath
-      )
-   );
+            O.map((s) => s.replace("./", "").split("/").slice(0, -1).join("/")),
+            O.map((mainPath): string[] => [
+               p.name,
+               mainPath,
+               ...specifierText.replace(p.name, "").replace(`/${mainPath}/`, "").split("/")
+            ]),
+            O.fold(() => [specifierText], F.identity)
+         );
+         return path.resolve(
+            config?.relativeProjectRoot ?? process.cwd(),
+            "node_modules",
+            ...parts
+         );
+      } else {
+         return path.resolve(
+            config?.relativeProjectRoot ?? process.cwd(),
+            "node_modules",
+            specifierText
+         );
+      }
+   }
+};
+/*
+ * F.pipe(
+ *    node,
+ *    O.fromPredicate(F.not(isSpecifierRelative)),
+ *    O.chain((n) =>
+ *       F.pipe(
+ *          O.some({}),
+ *          O.bind("specifierText", () => O.some(n.moduleSpecifier.text)),
+ *          O.bind("pkg", () => O.fromNullable(packageJSON)),
+ *          O.bind("absolutePath", ({ pkg, specifierText }) =>
+ *             F.pipe(
+ *                pkg,
+ *                O.fromPredicate((p) => !!p.name),
+ *                O.chain(O.fromPredicate((p) => specifierText.includes(p.name))),
+ *                O.chain(
+ *                   (p): O.Option<string> =>
+ *                      p.main
+ *                         ? O.some(p.main)
+ *                         : p.exports
+ *                         ? p.exports.import?.["./*"]
+ *                            ? O.some(p.exports.import["./*"])
+ *                            : p.exports["./*"]?.import
+ *                            ? O.some(p.exports["./*"].import)
+ *                            : O.none
+ *                         : O.none
+ *                ),
+ *                O.map((s) => s.replace("./", "").split("/").slice(0, -1).join("/")),
+ *                O.map((mainPath): string[] => [
+ *                   pkg.name,
+ *                   mainPath,
+ *                   ...specifierText.replace(pkg.name, "").replace(`/${mainPath}/`, "").split("/")
+ *                ]),
+ *                O.fold(() => [specifierText], F.identity),
+ *                (parts) =>
+ *                   O.some(
+ *                      path.resolve(
+ *                         config?.relativeProjectRoot ?? process.cwd(),
+ *                         "node_modules",
+ *                         ...parts
+ *                      )
+ *                   )
+ *             )
+ *          )
+ *       )
+ *    ),
+ *    O.fold(
+ *       () =>
+ *          path.resolve(
+ *             path.parse(sourceFile.fileName).dir,
+ *             node.moduleSpecifier.text === ".." ? "../" : node.moduleSpecifier.text
+ *          ),
+ *       ({ absolutePath }) => absolutePath
+ *    )
+ * );
+ */
 
 export const createValidESMPath = (
    node: ImportOrExport,

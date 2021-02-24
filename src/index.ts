@@ -2,14 +2,16 @@ import * as ts from "typescript";
 
 import { createRequireImport, createRequireStatement } from "./AST";
 import { PluginConfig } from "./Types";
-import { importExportVisitor } from "./Visitor";
+import { importExportVisitorFull, importExportVisitorSpecifierOnly } from "./Visitor";
 
 type Mutable<T> = { -readonly [k in keyof T]: T[k] };
 
 const transform = (_: ts.Program, config: PluginConfig): ts.TransformerFactory<ts.SourceFile> => (
    ctx
 ) => (sourceFile) => {
-   const { visitedSourceFile, info } = importExportVisitor(ctx, sourceFile, config);
+   const { visitedSourceFile, info } = config.createRequire
+      ? importExportVisitorFull(ctx, sourceFile, config)
+      : importExportVisitorSpecifierOnly(ctx, sourceFile, config);
    const generatedTopNodes = ts.factory.createNodeArray([
       ...info.esmImports,
       ...(info.shouldCreateRequire

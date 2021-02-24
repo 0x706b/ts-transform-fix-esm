@@ -44,6 +44,7 @@ export type NamedExport = Export & {
 };
 
 export type PluginConfig = {
+   createRequire?: boolean;
    extension?: string;
    ignore?: ReadonlyArray<string>;
    prefix?: string;
