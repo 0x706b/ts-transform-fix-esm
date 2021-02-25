@@ -76,47 +76,45 @@ export const importExportVisitorSpecifierOnly = (
                   ]
                };
             }
+         } else if (module.builtinModules.includes(specifierText)) {
+            if (isImport(node)) {
+               newInfo = {
+                  ...VisitorInfoM.empty,
+                  esmImports: [node]
+               };
+            } else if (isExport(node)) {
+               newInfo = {
+                  ...VisitorInfoM.empty,
+                  esmExports: [node]
+               };
+            }
          } else {
             const packageJSON = getPackageJSON(node, config.relativeProjectRoot);
             if (packageJSON) {
-               if (module.builtinModules.includes(specifierText)) {
-                  if (isImport(node)) {
-                     newInfo = {
-                        ...VisitorInfoM.empty,
-                        esmImports: [node]
-                     };
-                  } else if (isExport(node)) {
-                     newInfo = {
-                        ...VisitorInfoM.empty,
-                        esmExports: [node]
-                     };
-                  }
-               } else {
-                  if (isImport(node)) {
-                     newInfo = {
-                        ...VisitorInfoM.empty,
-                        esmImports: [
-                           ts.createImportDeclaration(
-                              node.decorators,
-                              node.modifiers,
-                              node.importClause,
-                              createValidESMPath(node, sourceFile, config, packageJSON)
-                           )
-                        ]
-                     };
-                  } else if (isExport(node)) {
-                     newInfo = {
-                        ...VisitorInfoM.empty,
-                        esmExports: [
-                           ts.createExportDeclaration(
-                              node.decorators,
-                              node.modifiers,
-                              node.exportClause,
-                              createValidESMPath(node, sourceFile, config, packageJSON)
-                           )
-                        ]
-                     };
-                  }
+               if (isImport(node)) {
+                  newInfo = {
+                     ...VisitorInfoM.empty,
+                     esmImports: [
+                        ts.createImportDeclaration(
+                           node.decorators,
+                           node.modifiers,
+                           node.importClause,
+                           createValidESMPath(node, sourceFile, config, packageJSON)
+                        )
+                     ]
+                  };
+               } else if (isExport(node)) {
+                  newInfo = {
+                     ...VisitorInfoM.empty,
+                     esmExports: [
+                        ts.createExportDeclaration(
+                           node.decorators,
+                           node.modifiers,
+                           node.exportClause,
+                           createValidESMPath(node, sourceFile, config, packageJSON)
+                        )
+                     ]
+                  };
                }
             }
          }
@@ -172,6 +170,18 @@ export const importExportVisitorFull = (
                     ]
                  }
                : VisitorInfoM.empty;
+         } else if (module.builtinModules.includes(specifierText)) {
+            if (isImport(node)) {
+               newInfo = {
+                  ...VisitorInfoM.empty,
+                  esmImports: [node]
+               };
+            } else if (isExport(node)) {
+               newInfo = {
+                  ...VisitorInfoM.empty,
+                  esmExports: [node]
+               };
+            }
          } else {
             const packageJSON = getPackageJSON(node, config.relativeProjectRoot);
             if (packageJSON) {
@@ -278,22 +288,6 @@ export const importExportVisitorFull = (
                               sourceFile.fileName
                            } : ${node.getText()}`
                         );
-                     }
-                  } else {
-                     if (isImport(node)) {
-                        if (module.builtinModules.includes(specifierText)) {
-                           newInfo = {
-                              ...VisitorInfoM.empty,
-                              esmImports: [node]
-                           };
-                        }
-                     } else if (isExport(node)) {
-                        if (module.builtinModules.includes(specifierText)) {
-                           newInfo = {
-                              ...VisitorInfoM.empty,
-                              esmExports: [node]
-                           };
-                        }
                      }
                   }
                }
